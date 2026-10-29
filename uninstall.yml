@@ -1,0 +1,14 @@
+---
+- name: Remove DefectDojo stack
+  hosts: defectdojo
+  vars_prompt:
+    - name: purge_volumes
+      prompt: "Also delete volumes (database + media)? (yes/no)"
+      private: false
+      default: "no"
+  tasks:
+    - name: Stop and remove containers
+      community.docker.docker_compose_v2:
+        project_src: "{{ defectdojo_dir }}"
+        state: absent
+        remove_volumes: "{{ purge_volumes | bool }}"

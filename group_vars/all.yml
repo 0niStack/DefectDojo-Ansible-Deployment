@@ -1,0 +1,22 @@
+---
+# ---- Source ----
+defectdojo_repo: https://github.com/DefectDojo/django-DefectDojo.git
+# Branch or tag. `master` follows the repo; pin a release tag for stability.
+defectdojo_version: master
+defectdojo_dir: /opt/django-DefectDojo
+
+# ---- Images (defectdojo-django + defectdojo-nginx) ----
+defectdojo_image_tag: latest
+
+# ---- Ports (nginx container) ----
+defectdojo_http_port: 8080
+defectdojo_https_port: 8443
+
+# ---- Admin ----
+# Empty = DefectDojo generates a random password (read from initializer logs).
+defectdojo_admin_password: ""
+# Save discovered admin credentials to ./credentials/ on the control machine
+defectdojo_fetch_credentials: true
+
+# ---- Behaviour ----
+defectdojo_init_timeout: 600   # seconds to wait for the initializer

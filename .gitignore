@@ -1,0 +1,4 @@
+credentials/*
+!credentials/.gitkeep
+*.retry
+.vault_pass

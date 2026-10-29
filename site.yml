@@ -1,0 +1,7 @@
+---
+- name: Deploy DefectDojo with Docker Compose
+  hosts: defectdojo
+  gather_facts: true
+  roles:
+    - docker
+    - defectdojo

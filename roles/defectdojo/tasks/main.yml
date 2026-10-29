@@ -1,0 +1,77 @@
+---
+- name: Clone DefectDojo repository
+  ansible.builtin.git:
+    repo: "{{ defectdojo_repo }}"
+    dest: "{{ defectdojo_dir }}"
+    version: "{{ defectdojo_version }}"
+    depth: 1
+    force: true
+
+- name: Write .env for docker compose
+  ansible.builtin.template:
+    src: env.j2
+    dest: "{{ defectdojo_dir }}/.env"
+    mode: "0600"
+  no_log: true
+
+- name: Start DefectDojo (docker compose up -d)
+  community.docker.docker_compose_v2:
+    project_src: "{{ defectdojo_dir }}"
+    state: present
+    pull: always
+    wait: false
+
+- name: Wait for initializer container to finish
+  ansible.builtin.command:
+    cmd: docker compose ps -a --format json initializer
+    chdir: "{{ defectdojo_dir }}"
+  register: init_state
+  changed_when: false
+  until: '"exited" in init_state.stdout'
+  retries: "{{ (defectdojo_init_timeout | int / 10) | int }}"
+  delay: 10
+
+- name: Verify initializer exited cleanly
+  ansible.builtin.assert:
+    that: '"ExitCode\":0" in init_state.stdout'
+    fail_msg: "Initializer failed. Run: cd {{ defectdojo_dir }} && docker compose logs initializer"
+
+- name: Wait for web UI to respond
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ defectdojo_http_port }}/login?next=/"
+    status_code: [200, 301, 302]
+  register: dojo_http
+  until: dojo_http.status is defined and dojo_http.status in [200, 301, 302]
+  retries: 30
+  delay: 10
+
+- name: Look for generated admin password in initializer logs
+  ansible.builtin.shell: >-
+    docker compose logs initializer 2>/dev/null | grep "Admin password:" | tail -n1 | sed 's/.*Admin password: *//'
+  args:
+    chdir: "{{ defectdojo_dir }}"
+    executable: /bin/bash
+  register: dojo_admin_pw
+  changed_when: false
+  no_log: true
+  when: defectdojo_fetch_credentials | bool
+
+- name: Save credentials on the control machine
+  ansible.builtin.copy:
+    dest: "{{ playbook_dir }}/credentials/{{ inventory_hostname }}.txt"
+    mode: "0600"
+    content: |
+      url: http://{{ ansible_host | default(inventory_hostname) }}:{{ defectdojo_http_port }}
+      username: admin
+      password: {{ defectdojo_admin_password if (defectdojo_admin_password | length > 0) else ((dojo_admin_pw.stdout | default('')) or '(not in logs - initialised earlier; see README)') }}
+  delegate_to: localhost
+  become: false
+  no_log: true
+  when: defectdojo_fetch_credentials | bool
+
+- name: Show access info
+  ansible.builtin.debug:
+    msg:
+      - "DefectDojo is up: http://{{ ansible_host | default(inventory_hostname) }}:{{ defectdojo_http_port }}"
+      - "Username: admin"
+      - "Password: see credentials/{{ inventory_hostname }}.txt (or the value of defectdojo_admin_password)"
